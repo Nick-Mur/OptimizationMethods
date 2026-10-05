@@ -36,6 +36,28 @@ def fmt(value: F) -> str:
     return str(value)
 
 
+def to_fraction(value) -> F:
+    """Переводит число в точную дробь.
+
+    float берётся по десятичной записи (0.1 станет 1/10, а не двоичным
+    приближением), иначе сравнения с нулём в таблицах работали бы неточно.
+
+    Raises:
+        ValueError: если значение нельзя прочитать как число.
+    """
+    if isinstance(value, float):
+        value = str(value)
+    try:
+        return F(value)
+    except (ValueError, TypeError, ZeroDivisionError):
+        raise ValueError(f"не удалось прочитать число: {value!r}") from None
+
+
+def index(name: str) -> int:
+    """Номер переменной по её имени: "x7" -> 7."""
+    return int(name[1:])
+
+
 class Tableau:
     """Симплекс-таблица
 
@@ -58,12 +80,12 @@ class Tableau:
     """
 
     def __init__(
-        self,
-        cols: list[str],
-        rows: list[str],
-        M: list[list[F]],
-        art: set[str],
-        verbose: bool = True,
+            self,
+            cols: list[str],
+            rows: list[str],
+            M: list[list[F]],
+            art: set[str],
+            verbose: bool = True,
     ):
         self.cols = cols
         self.rows = rows
@@ -106,39 +128,46 @@ class Tableau:
             F(0),
         )
 
-    def entering(self) -> int | None:
+    def entering(self, bland: bool = False) -> int | None:
         """Выбирает разрешающий столбец.
 
-        Берётся наименьшая (самая отрицательная) оценка p_j: по ней цель
-        убывает быстрее всего. Если таких несколько, берётся первая слева.
+        Обычно берётся наименьшая (самая отрицательная) оценка p_j: по ней
+        цель убывает быстрее всего. Если таких несколько, берётся первая
+        слева. По правилу Бленда (bland=True) берётся отрицательная оценка
+        у переменной с наименьшим номером: это защищает от зацикливания.
 
         Returns:
             Номер столбца или None, если отрицательных оценок нет
             (то есть оптимум достигнут).
         """
         estimates = self.M[-1][:-1]
-        j = min(range(len(estimates)), key=estimates.__getitem__, default=None)
-        return j if j is not None and estimates[j] < 0 else None
+        negative = [j for j, p in enumerate(estimates) if p < 0]
+        if not negative:
+            return None
+        if bland:
+            return min(negative, key=lambda j: index(self.cols[j]))
+        return min(negative, key=lambda j: estimates[j])
 
-    def leaving(self, j: int) -> int | None:
+    def leaving(self, j: int, bland: bool = False) -> int | None:
         """Выбирает разрешающую строку для столбца j.
 
         Смотрим только на положительные элементы столбца: именно они
         ограничивают рост переменной (базисная переменная доходит до нуля при
         росте на b/a). Берём строку с наименьшим отношением b/a, чтобы после
         шага ни одна переменная не стала отрицательной. При равенстве
-        отношений берётся строка выше.
+        отношений берётся строка выше, а по правилу Бленда (bland=True)
+        строка с базисной переменной наименьшего номера.
 
         Returns:
             Номер строки или None, если в столбце нет положительных
             элементов (переменную можно увеличивать бесконечно).
         """
         ratios = [
-            (row[-1] / row[j], i)
+            (row[-1] / row[j], index(self.rows[i]) if bland else i, i)
             for i, row in enumerate(self.M[:-1])
             if row[j] > 0
         ]
-        return min(ratios)[1] if ratios else None
+        return min(ratios)[2] if ratios else None
 
     def pivot(self, i: int, j: int) -> None:
         """Делает шаг: меняет местами базисную и свободную переменные.
@@ -184,6 +213,10 @@ class Tableau:
     def optimize(self, title: str) -> bool:
         """Делает шаги, пока цель можно улучшить, и печатает таблицы.
 
+        Если шаг не уменьшает цель (разрешающая строка с b = 0), следующие
+        шаги выбираются по правилу Бленда, пока цель снова не уменьшится.
+        Иначе при вырожденности таблицы могли бы повторяться бесконечно.
+
         Args:
             title: Название этапа для заголовков таблиц.
 
@@ -194,11 +227,13 @@ class Tableau:
         """
         self.show(f"{title}: таблица 0")
         step = 0
+        stalled = False
 
-        while (j := self.entering()) is not None:
-            i = self.leaving(j)
+        while (j := self.entering(stalled)) is not None:
+            i = self.leaving(j, stalled)
             if i is None:
                 return False
+            stalled = self.M[i][-1] == 0
 
             if self.verbose:
                 print(
@@ -214,19 +249,21 @@ class Tableau:
 
 
 def solve(
-    c: list,
-    A: list[list],
-    rel: list[str],
-    b: list,
-    maximize: bool = False,
-    verbose: bool = True,
+        c: list,
+        A: list[list],
+        rel: list[str],
+        b: list,
+        maximize: bool = False,
+        verbose: bool = True,
 ) -> Result:
     """Решает задачу c·x -> min (max) при Ax {<=, =, >=} b и x >= 0.
 
     Сначала приводит задачу к каноническому виду, затем решает
     вспомогательную задачу (если нет готового базиса) и после неё основную.
-    Числа можно задавать целыми, Fraction или строками вида "1/3" и "0.1":
-    тогда дроби будут точными.
+    Числа можно задавать целыми, float, Fraction или строками вида "1/3":
+    всё переводится в точные дроби (float по десятичной записи).
+    Все переменные неотрицательные (x >= 0), свободные по знаку
+    переменные не поддерживаются.
 
     Args:
         c: Коэффициенты целевой функции.
@@ -238,21 +275,45 @@ def solve(
 
     Returns:
         Result со статусом, оптимальной точкой и значением цели.
+
+    Raises:
+        ValueError: если размеры c, A, rel, b не согласованы, указан
+            неизвестный знак ограничения или число нельзя прочитать.
     """
     n = len(c)
+    if n == 0:
+        raise ValueError("целевая функция пуста: в c нет коэффициентов")
+    if not len(A) == len(rel) == len(b):
+        raise ValueError(
+            f"число строк не совпадает: в A {len(A)}, в rel {len(rel)}, "
+            f"в b {len(b)}"
+        )
+    for k, row in enumerate(A, start=1):
+        if len(row) != n:
+            raise ValueError(
+                f"в строке {k} матрицы A {len(row)} коэффициентов, "
+                f"а в c их {n}"
+            )
+    for k, relation in enumerate(rel, start=1):
+        if relation not in FLIP:
+            raise ValueError(
+                f"неизвестный знак {relation!r} в ограничении {k}: "
+                f"допустимы '<=', '=', '>='"
+            )
+
     # Максимум c·x это минимум (-c)·x, поэтому всегда минимизируем,
     # а в конце возвращаем знак обратно.
     sign = -1 if maximize else 1
     names = [f"x{j + 1}" for j in range(n)]
-    cost = {name: sign * F(value) for name, value in zip(names, c)}
+    cost = {name: sign * to_fraction(value) for name, value in zip(names, c)}
 
     # Правая часть должна быть неотрицательной: иначе умножаем строку на -1
     # (знак неравенства при этом меняется).
     rels = list(rel)
     body = []
     for k, (row, rhs) in enumerate(zip(A, b)):
-        row = [F(value) for value in row]
-        rhs = F(rhs)
+        row = [to_fraction(value) for value in row]
+        rhs = to_fraction(rhs)
         if rhs < 0:
             row = [-value for value in row]
             rhs = -rhs
