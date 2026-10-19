@@ -149,6 +149,8 @@ def minimize(function: str, a: float, b: float, eps: float,
         warnings.warn(f"точность eps не достигнута ({status}), "
                       f"результат может быть хуже на W(x*) - min p")
 
+    # min p по итоговой ломаной: L могла вырасти на последней итерации.
+    lower = float(((zs[:-1] + zs[1:]) / 2 - L * np.diff(xs) / 2).min())
     best = int(np.argmin(zs))  # лучшая из вычисленных точек
     return Result(
         x=float(xs[best]),
