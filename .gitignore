@@ -1,3 +1,9 @@
 /.idea
-/lab2/docs
-/lab2/tests
+/lab2/docs/*
+!/lab2/docs/img/
+
+/lab3/docs/*
+!/lab3/docs/img/
+/lab3/**/__pycache__/
+
+/.obsidian/

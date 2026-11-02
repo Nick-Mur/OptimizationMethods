@@ -18,7 +18,8 @@ class Result(NamedTuple):
 
     Attributes:
         x, value: Найденная точка x* и W(x*).
-        gap: W(x*) - min p, оценка погрешности сверху.
+        gap: W(x*) - min p по итоговой ломаной при выбранной L. Это оценка
+            погрешности сверху, если L подходит для всего отрезка.
         L: Константа Липшица.
         iterations: Номер последней итерации n (u_0 = a, u_1 = b).
         seconds: Время работы.
@@ -172,7 +173,7 @@ def summary(result: Result) -> str:
     return "\n".join([
         f"Функция: {result.function}",
         f"Глобальный {word}: x* = {result.x:.6f}, W(x*) = {result.value:.6f}",
-        f"Гарантированная погрешность по значению: {result.gap:.2e}",
+        f"Оценочный разрыв при выбранной L: {result.gap:.2e}",
         f"Константа Липшица: L = {result.L:.6g}",
         f"Итераций: {result.iterations} (вычислений W: {result.iterations + 1})",
         f"Время: {result.seconds * 1000:.1f} мс, статус: {result.status}",
