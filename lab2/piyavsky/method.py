@@ -44,6 +44,7 @@ class Result(NamedTuple):
 def estimate_L(W, a: float, b: float, grid: int = 10_000,
                reserve: float = 1.2) -> float:
     """L = reserve * max |dW/dx| по сетке из grid шагов (как в Excel)."""
+    # Оценить крутизну по средним наклонам между соседними узлами сетки.
     xs = np.linspace(a, b, grid + 1)
     if np.any(np.diff(xs) <= 0):
         raise ValueError("отрезок слишком короткий: узлы сетки совпадают в double")
@@ -58,6 +59,7 @@ def estimate_L(W, a: float, b: float, grid: int = 10_000,
             f"оценка L зависит от шага сетки ({coarse:g} -> {slopes.max():g}): "
             "функция может быть не липшицевой или сетка слишком грубая"
         )
+    # Запас применяется к наблюдаемому максимуму; результат зависит от сетки.
     return reserve * float(slopes.max())
 
 
@@ -85,6 +87,7 @@ def minimize(function: str, a: float, b: float, eps: float,
     Raises:
         ValueError: Некорректный ввод, W не конечна или заданная L мала.
     """
+    # Проверить параметры и подготовить функцию для вычислений.
     start = time.perf_counter()
     a, b, eps = float(a), float(b), float(eps)
     check_parameters(a, b, eps, L, mode, max_iter, grid, reserve)
@@ -95,11 +98,13 @@ def minimize(function: str, a: float, b: float, eps: float,
     def W(x):
         return sign * user_W(x)
 
+    # Использовать заданную константу или оценить её по сетке.
     adaptive = L is None
     if adaptive:
         # eps / (b - a) — чтобы L не была 0 у постоянной функции.
         L = max(estimate_L(W, a, b, grid, reserve), eps / (b - a))
 
+    # Хранить точки по возрастанию координаты и отдельно — в порядке вычисления.
     xs, zs = np.array([a, b]), W(np.array([a, b]))  # итерации 0 и 1
     check_finite(xs, zs)
     order = [(a, zs[0]), (b, zs[1])]
@@ -118,15 +123,19 @@ def minimize(function: str, a: float, b: float, eps: float,
         warnings.warn(message + f", L увеличена до {L:g}")
         return True
 
+    # Проверить наклон на начальном отрезке и начать последовательное уточнение.
     check_lipschitz(0)
     status = "max_iter"
     for _ in range(2, max_iter + 1):
         # Нижние вершины ломаной между соседними точками.
+        # Выбрать наименьшую нижнюю оценку среди всех промежутков.
         lows = (zs[:-1] + zs[1:]) / 2 - L * np.diff(xs) / 2
         i = int(np.argmin(lows))
         lower = lows[i]  # min p_{n-1}
+        # Пересечение соседних вспомогательных функций задаёт следующую точку.
         u = (xs[i] + xs[i + 1]) / 2 + (zs[i] - zs[i + 1]) / (2 * L)
 
+        # Вычислить функцию в вершине и разделить выбранный промежуток.
         inside = xs[i] < u < xs[i + 1]
         if inside:
             z = float(W(u))
@@ -139,6 +148,7 @@ def minimize(function: str, a: float, b: float, eps: float,
             # Вершина совпала с уже вычисленной точкой.
             u, z = (xs[i], zs[i]) if u <= xs[i] else (xs[i + 1], zs[i + 1])
 
+        # Сравнить значение функции с нижней оценкой и заданной точностью.
         if z - lower < eps:
             status = "eps"
             break
@@ -150,7 +160,7 @@ def minimize(function: str, a: float, b: float, eps: float,
         warnings.warn(f"точность eps не достигнута ({status}), "
                       f"результат может быть хуже на W(x*) - min p")
 
-    # min p по итоговой ломаной: L могла вырасти на последней итерации.
+    # Пересчитать нижнюю оценку и выбрать лучшее из вычисленных значений.
     lower = float(((zs[:-1] + zs[1:]) / 2 - L * np.diff(xs) / 2).min())
     best = int(np.argmin(zs))  # лучшая из вычисленных точек
     return Result(

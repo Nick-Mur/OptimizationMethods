@@ -41,6 +41,7 @@ def number(value: sp.Expr) -> str:
 
 def report(solution: Solution) -> str:
     """Текст решения: постановка, система, найденные точки и вывод о глобальных экстремумах."""
+    # Представить исходную задачу, функцию Лагранжа и составленную систему.
     s = solution
     names = ", ".join(map(str, s.variables))
     lagrangian = " + ".join([text(s.f), *(f"λ{i}*({text(gi)})" for i, gi in enumerate(s.g, 1))])
@@ -56,12 +57,14 @@ def report(solution: Solution) -> str:
                      "Подозрительных точек нет: допустимое множество пусто или f на нём экстремумов не имеет.")
         return "\n".join(lines)
 
+    # Для каждой точки вывести значение функции, множители и характер точки.
     lines.append(f"Точки ({names}), подозрительные на экстремум, по возрастанию f:")
     for p in s.points:
         lam = "" if p.multipliers is None else f", λ = ({', '.join(map(text, p.multipliers))})"
         lines.append(f"  ({', '.join(map(text, p.coords))}): f = {number(p.value)}{lam}")
         lines.append(f"      {VERDICTS[p.kind]}")
 
+    # При установленной ограниченности сравнить значения найденных кандидатов.
     if s.bounded:
         lines += ["", "Допустимое множество замкнуто и ограничено. По теореме Вейерштрасса f достигает на нём",
                   "наибольшего и наименьшего значений, и только в найденных точках:"]
@@ -77,6 +80,7 @@ def report(solution: Solution) -> str:
 
 def solve_in_time(f_text: str, g_texts: list[str]) -> Solution:
     """Решает задачу в отдельном процессе и прерывает его по истечении TIME_LIMIT."""
+    # Ограничить время символьного решения системы.
     with multiprocessing.Pool(1) as pool:
         try:
             return pool.apply_async(solve, (f_text, g_texts)).get(TIME_LIMIT)
@@ -87,6 +91,7 @@ def solve_in_time(f_text: str, g_texts: list[str]) -> Solution:
 
 def main(argv: list[str] | None = None) -> int:
     """Точка входа: аргументы командной строки -> текст решения. Код выхода 2 — ошибка."""
+    # Прочитать целевую функцию и ограничения, затем вывести отчёт о решении.
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("-h", "--help"):
         print(USAGE)

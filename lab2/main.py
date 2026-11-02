@@ -8,6 +8,7 @@ from piyavsky import minimize, parse_number, summary
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Прочитать функцию, границы отрезка и параметры поиска из командной строки.
     parser = argparse.ArgumentParser(
         description="Глобальный экстремум липшицевой функции методом ломаных.",
         epilog='Пример: python main.py "x + sin(3.14159*x)" -2 2 0.01. '
@@ -25,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="сохранить график в файл (иначе открыть окно)")
     args = parser.parse_args(argv)
 
+    # Преобразовать числовые выражения и передать параметры методу ломаных.
     try:
         a, b, eps = (parse_number(v) for v in (args.a, args.b, args.eps))
         L = None if args.L is None else parse_number(args.L)
@@ -34,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as error:
         parser.error(str(error))  # сообщение и код выхода 2
 
+    # Вывести численный результат и показать или сохранить график.
     print(summary(result))
     if args.plot:
         matplotlib.use("Agg")  # без окна

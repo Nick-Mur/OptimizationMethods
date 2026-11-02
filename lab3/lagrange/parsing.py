@@ -34,6 +34,7 @@ def _source(expression: str, text: str) -> tuple[str, set[str]]:
     Raises:
         ValueError: Запись недопустима.
     """
+    # Привести математическую запись к синтаксису Python и построить её дерево.
     source = expression.translate(TYPOGRAPHY).replace("^", "**").strip()
     if not source:
         raise ValueError("пустое выражение")
@@ -44,6 +45,7 @@ def _source(expression: str, text: str) -> tuple[str, set[str]]:
     except (SyntaxError, RecursionError):
         raise ValueError(f"не удалось разобрать «{text}»: {HINT}") from None
 
+    # Проверить допустимые операции и собрать имена переменных.
     for node in ast.walk(tree):
         if not isinstance(node, ALLOWED) or (
                 isinstance(node, ast.Constant) and type(node.value) not in (int, float)):
@@ -101,6 +103,7 @@ def parse_problem(f_text: str, g_texts: list[str]) -> tuple[sp.Expr, list[sp.Exp
     if "=" in f_body:
         raise ValueError("целевая функция записывается без знака «=» (допустим заголовок «f(x, y) = ...»)")
 
+    # Перевести ограничения в вид g = 0 и определить порядок переменных.
     checked = [_source(f_body, f_text)] + [_source(_zero_form(text), text) for text in g_texts]
     used = set().union(*(names for _, names in checked))
     names = _declared_variables(header) or sorted(used)
@@ -111,10 +114,12 @@ def parse_problem(f_text: str, g_texts: list[str]) -> tuple[sp.Expr, list[sp.Exp
     if len(g_texts) > len(names):
         raise ValueError(f"ограничений ({len(g_texts)}) больше, чем переменных ({len(names)})")
 
+    # Создать вещественные символы и преобразовать строки в выражения SymPy.
     variables = [sp.Symbol(name, real=True) for name in names]
     scope = {**CONSTANTS, **dict(zip(names, variables))}
     f, *g = [sp.sympify(source, locals=scope, rational=True) for source, _ in checked]
 
+    # Проверить, что целевая функция и ограничения являются многочленами.
     for text, expr in zip([f_text, *g_texts], [f, *g]):
         if expr.has(sp.zoo, sp.nan):
             raise ValueError(f"в «{text}» деление на ноль")

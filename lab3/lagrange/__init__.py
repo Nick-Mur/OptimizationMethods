@@ -19,4 +19,5 @@ def solve(f_text: str, g_texts: list[str]) -> Solution:
     Raises:
         ValueError: Некорректное условие или задача не решается методом (причина в сообщении).
     """
+    # Преобразовать текст условия в символьные выражения и передать их методу.
     return find_extrema(*parse_problem(f_text, g_texts))

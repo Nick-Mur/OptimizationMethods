@@ -9,6 +9,7 @@ from .validation import parse_function
 
 def plot(result: Result, n: int | None = None, ax=None):
     """Рисует W, g_i, ломаную и x* после итерации n (по умолчанию последней)."""
+    # Выбрать итерацию и восстановить знак исходной функции.
     if ax is None:
         _, ax = plt.subplots(figsize=(10, 5))
     sign = 1 if result.mode == "min" else -1
@@ -27,6 +28,7 @@ def plot(result: Result, n: int | None = None, ax=None):
     line_x = np.insert(xs, range(1, len(xs)), low_x)
     line_y = np.insert(ys, range(1, len(ys)), low_y)
 
+    # Построить исходную кривую, вспомогательные функции и итоговую ломаную.
     grid = np.linspace(a, b, 2000)  # только для рисования
     curve = parse_function(result.function)(grid)
     for u, z in zip(us, zs):
@@ -38,6 +40,7 @@ def plot(result: Result, n: int | None = None, ax=None):
             label=f"ломаная p_{n} ({name}), серые — g_i(x)")
     ax.scatter(us, sign * zs, color="black", s=12, zorder=3, label="u_k")
 
+    # Отметить лучшую точку среди вычисленных к выбранной итерации.
     best = int(np.argmin(zs))
     ax.scatter([us[best]], [sign * zs[best]], color="red", s=60, zorder=4,
                label=f"x* = {us[best]:.4f}, W = {sign * zs[best]:.4f}")

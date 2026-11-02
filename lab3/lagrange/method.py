@@ -82,6 +82,7 @@ def _real_solutions(equations: list, unknowns: list, variables: list) -> list[di
     except NotImplementedError:
         raise ValueError("SymPy не может решить систему уравнений аналитически") from None
 
+    # Оставить вещественные решения с определёнными координатами точек.
     real = []
     for solution in solutions:
         values = [solution.get(u, u) for u in unknowns]
@@ -110,13 +111,16 @@ def _classify(hessian: sp.Matrix, jacobian: sp.Matrix) -> str:
     Returns:
         Значение Point.kind.
     """
+    # Найти направления, касательные ко всем ограничениям: J·d = 0.
     tangent = jacobian.nullspace(simplify=True)
     if not tangent:
         return "isolated"
+    # Перенести второй дифференциал в базис касательного пространства.
     basis = sp.Matrix.hstack(*tangent)
     reduced = (basis.T * hessian * basis).evalf(DIGITS).applyfunc(sp.re)
     with mpmath.workdps(DIGITS):
         eigenvalues = mpmath.eigsy(mpmath.matrix(reduced.tolist()), eigvals_only=True)
+    # По знакам собственных чисел определить характер квадратичной формы.
     positive = any(e > TOLERANCE for e in eigenvalues)
     negative = any(e < -TOLERANCE for e in eigenvalues)
     if positive and negative:
@@ -166,16 +170,19 @@ def find_extrema(f: sp.Expr, g: list, variables: list) -> Solution:
     Raises:
         ValueError: Точек бесконечно много, система не решается или результат не прошёл проверку.
     """
+    # Найти допустимые точки, где градиенты ограничений линейно зависимы.
     m = len(g)
     jacobian = sp.Matrix(g).jacobian(variables)
     minors = [jacobian[:, list(cols)].det() for cols in combinations(range(len(variables)), m)]
     irregular = _real_solutions([*g, *minors], variables, variables)
 
+    # Составить функцию Лагранжа, её производные и матрицу вторых производных.
     multipliers = sp.symbols(f"λ1:{m + 1}")
     lagrangian = f + sum(lam * gi for lam, gi in zip(multipliers, g))
     equations = [sp.diff(lagrangian, x) for x in variables] + g
     hessian = sp.hessian(lagrangian, variables)
 
+    # Добавить нерегулярные точки и классифицировать регулярные решения системы.
     points = [Point(tuple(s.get(x, x) for x in variables), sp.simplify(f.subs(s)), None, "irregular")
               for s in irregular]
     for s in _real_solutions(equations, [*variables, *multipliers], variables):
@@ -185,11 +192,13 @@ def find_extrema(f: sp.Expr, g: list, variables: list) -> Solution:
                             tuple(s[lam] for lam in multipliers),
                             _classify(hessian.subs(s), jacobian.subs(s))))
 
+    # Проверить кандидатов подстановкой в ограничения и уравнения системы.
     for p in points:
         at = dict(zip(variables, p.coords)) | dict(zip(multipliers, p.multipliers or ()))
         residuals = g if p.multipliers is None else equations
         if not all(is_zero(r.subs(at)) for r in residuals):
             raise ValueError(f"точка {p.coords} не прошла проверку подстановкой")
 
+    # Упорядочить кандидатов по значению целевой функции.
     points.sort(key=lambda p: sp.re(sp.N(p.value, DIGITS)))
     return Solution(variables, f, g, equations, points, _is_bounded(g, variables))

@@ -28,6 +28,7 @@ PREFIX = re.compile(r"^\s*[A-Za-z]\w*\s*(\(\s*x\s*\))?\s*=(?!=)")
 
 def _compile(text: str, variables: tuple[str, ...]):
     """Проверяет выражение по белому списку и компилирует его."""
+    # Привести запись степени к синтаксису Python и построить дерево выражения.
     source = text.replace("^", "**").strip()
     if not source:
         raise ValueError("пустое выражение")
@@ -38,6 +39,7 @@ def _compile(text: str, variables: tuple[str, ...]):
             f"не удалось разобрать «{text}» (умножение пишется явно: 2*x)"
         ) from None
 
+    # Разрешить только перечисленные операции, функции, константы и переменные.
     names = {*variables, *CONSTANTS, *FUNCTIONS}
     for node in ast.walk(tree):
         if not isinstance(node, ALLOWED_NODES):
@@ -58,7 +60,7 @@ def _compile(text: str, variables: tuple[str, ...]):
 
 
 def _evaluate(code, text: str, **variables) -> np.ndarray:
-    # Вне области определения numpy даёт nan/inf, их ловит check_finite.
+    # Вычислить выражение в пространстве разрешённых имён без встроенных функций.
     with np.errstate(all="ignore"):
         try:
             scope = {**FUNCTIONS, **CONSTANTS, **variables}
@@ -69,6 +71,7 @@ def _evaluate(code, text: str, **variables) -> np.ndarray:
 
 def parse_function(text: str) -> Callable[[np.ndarray], np.ndarray]:
     """Строка "f(x) = ..." -> функция от массива x."""
+    # Скомпилировать выражение один раз для последующих вычислений в разных точках.
     code = _compile(PREFIX.sub("", text, count=1), ("x",))
 
     def W(x):
