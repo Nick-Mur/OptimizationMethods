@@ -6,4 +6,13 @@
 !/lab3/docs/img/
 /lab3/**/__pycache__/
 
+/lab4/docs/*
+!/lab4/docs/img/
+/lab4/**/__pycache__/
+/lab4/*.pdf
+/lab4/*.docx
+/lab4/*.xlsx
+__pycache__/
+.pytest_cache/
+
 /.obsidian/
